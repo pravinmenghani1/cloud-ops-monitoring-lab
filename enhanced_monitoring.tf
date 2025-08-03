@@ -4,14 +4,15 @@
 resource "aws_cloudwatch_metric_alarm" "nginx_error_rate" {
   alarm_name          = "docker-nginx-high-error-rate"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
+  evaluation_periods  = "1"  # Reduced for faster triggering
   metric_name         = "ErrorRate"
   namespace           = "AWS/ApplicationELB"
-  period              = "300"
+  period              = "60"   # Reduced period
   statistic           = "Average"
-  threshold           = "5"
+  threshold           = "2"    # Reduced threshold
   alarm_description   = "This metric monitors nginx error rate"
   alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
   treat_missing_data  = "notBreaching"
 
   dimensions = {
@@ -382,14 +383,15 @@ resource "aws_cloudwatch_log_metric_filter" "nginx_request_count" {
 resource "aws_cloudwatch_metric_alarm" "custom_nginx_error_rate" {
   alarm_name          = "custom-nginx-high-error-rate"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
+  evaluation_periods  = "1"  # Reduced for faster triggering
   metric_name         = "NginxErrorRate"
   namespace           = "Custom/Nginx"
-  period              = "300"
+  period              = "60"   # Reduced period
   statistic           = "Sum"
-  threshold           = "10"
+  threshold           = "3"    # Reduced threshold
   alarm_description   = "This metric monitors custom nginx error rate from logs"
   alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
   treat_missing_data  = "notBreaching"
 
   tags = {
@@ -401,14 +403,15 @@ resource "aws_cloudwatch_metric_alarm" "custom_nginx_error_rate" {
 resource "aws_cloudwatch_metric_alarm" "custom_nginx_response_time" {
   alarm_name          = "custom-nginx-slow-response-time"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "3"
+  evaluation_periods  = "1"  # Reduced for faster triggering
   metric_name         = "NginxResponseTime"
   namespace           = "Custom/Nginx"
-  period              = "300"
+  period              = "60"   # Reduced period
   statistic           = "Average"
-  threshold           = "2.0"
+  threshold           = "1.0"  # Reduced threshold for easier demo
   alarm_description   = "This metric monitors custom nginx response time from logs"
   alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
   treat_missing_data  = "notBreaching"
 
   tags = {

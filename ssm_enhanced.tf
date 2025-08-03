@@ -314,7 +314,189 @@ resource "aws_ssm_association" "deploy_nginx_enhanced" {
   }
 
   tags = {
-    Name = "deploy-nginx-enhanced"
+    Name        = "deploy-nginx-enhanced"
+    Environment = var.environment
+  }
+}
+
+# SSM Document for Demo Tools and Testing
+resource "aws_ssm_document" "setup_demo_tools" {
+  name          = "SetupDemoTools"
+  document_type = "Command"
+  document_format = "YAML"
+
+  content = <<DOC
+schemaVersion: '2.2'
+description: Setup demo tools for stress testing and latency simulation
+mainSteps:
+  - action: aws:runShellScript
+    name: setupDemoTools
+    inputs:
+      timeoutSeconds: '300'
+      runCommand:
+        - |
+          #!/bin/bash
+          set -e
+          
+          echo "=== Setting up demo tools ==="
+          
+          # Install stress testing tools
+          yum install -y stress-ng htop iotop
+          
+          # Create latency simulation endpoints
+          mkdir -p /opt/nginx/html/api
+          
+          # Create slow endpoint that takes 2-5 seconds
+          cat > /opt/nginx/html/api/slow.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Slow Endpoint</title>
+              <script>
+                  // Simulate slow loading
+                  setTimeout(function() {
+                      document.getElementById('content').innerHTML = 'Slow content loaded after delay!';
+                  }, 3000);
+              </script>
+          </head>
+          <body>
+              <h1>Slow Loading Endpoint</h1>
+              <div id="content">Loading... (this takes 3 seconds)</div>
+              <p>This endpoint simulates slow response times for monitoring demos.</p>
+          </body>
+          </html>
+          EOF
+          
+          # Create error simulation endpoint
+          cat > /opt/nginx/html/api/error.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Error Simulation</title>
+              <script>
+                  // Randomly generate errors for demo
+                  if (Math.random() < 0.3) {
+                      throw new Error('Simulated client-side error for monitoring demo');
+                  }
+              </script>
+          </head>
+          <body>
+              <h1>Error Simulation Endpoint</h1>
+              <p>This endpoint randomly generates errors for monitoring demos.</p>
+              <p>Refresh the page multiple times to trigger errors.</p>
+          </body>
+          </html>
+          EOF
+          
+          # Create test endpoint with RUM integration
+          cat > /opt/nginx/html/api/test.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Test Endpoint with RUM</title>
+              <script>
+                  // Enhanced RUM tracking
+                  window.addEventListener('load', function() {
+                      // Simulate user interactions for RUM
+                      setTimeout(function() {
+                          console.log('User interaction simulated');
+                          // In real app, this would trigger RUM events
+                      }, 1000);
+                  });
+              </script>
+          </head>
+          <body>
+              <h1>Test Endpoint</h1>
+              <p>This endpoint is optimized for RUM monitoring.</p>
+              <button onclick="console.log('Button clicked - RUM event')">Test Button</button>
+          </body>
+          </html>
+          EOF
+          
+          # Create stress test scripts
+          cat > /opt/stress-cpu.sh << 'EOF'
+          #!/bin/bash
+          echo "Starting CPU stress test for 5 minutes..."
+          stress-ng --cpu 2 --timeout 300s --metrics-brief
+          echo "CPU stress test completed"
+          EOF
+          
+          cat > /opt/stress-memory.sh << 'EOF'
+          #!/bin/bash
+          echo "Starting Memory stress test for 3 minutes..."
+          stress-ng --vm 1 --vm-bytes 512M --timeout 180s --metrics-brief
+          echo "Memory stress test completed"
+          EOF
+          
+          cat > /opt/generate-traffic.sh << 'EOF'
+          #!/bin/bash
+          echo "Generating web traffic for monitoring demo..."
+          
+          # Get the local IP
+          LOCAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+          
+          # Generate normal traffic
+          for i in {1..20}; do
+              curl -s http://$LOCAL_IP/ > /dev/null
+              curl -s http://$LOCAL_IP/health > /dev/null
+              sleep 1
+          done
+          
+          # Generate slow requests
+          for i in {1..5}; do
+              curl -s http://$LOCAL_IP/api/slow.html > /dev/null &
+              sleep 2
+          done
+          
+          # Generate some errors (404s)
+          for i in {1..10}; do
+              curl -s http://$LOCAL_IP/nonexistent-page > /dev/null
+              sleep 1
+          done
+          
+          echo "Traffic generation completed"
+          EOF
+          
+          # Make scripts executable
+          chmod +x /opt/stress-*.sh /opt/generate-traffic.sh
+          
+          # Restart nginx container to pick up new files
+          docker restart nginx-app || true
+          
+          echo "=== Demo tools setup completed ==="
+          echo "Available tools:"
+          echo "  - /opt/stress-cpu.sh (CPU stress test)"
+          echo "  - /opt/stress-memory.sh (Memory stress test)"
+          echo "  - /opt/generate-traffic.sh (Web traffic generation)"
+          echo "  - http://your-ip/api/slow.html (Slow endpoint)"
+          echo "  - http://your-ip/api/error.html (Error simulation)"
+          echo "  - http://your-ip/api/test.html (RUM test endpoint)"
+DOC
+
+  tags = {
+    Name        = "SetupDemoTools"
+    Environment = var.environment
+  }
+}
+
+# SSM Association for demo tools
+resource "aws_ssm_association" "setup_demo_tools" {
+  name = aws_ssm_document.setup_demo_tools.name
+
+  depends_on = [aws_ssm_association.deploy_nginx_enhanced]
+
+  targets {
+    key    = "tag:DockerHost"
+    values = ["true"]
+  }
+
+  output_location {
+    s3_bucket_name = aws_s3_bucket.ssm_output_bucket.bucket
+    s3_key_prefix  = "demo-tools-setup/"
+  }
+
+  tags = {
+    Name        = "setup-demo-tools"
     Environment = var.environment
   }
 }

@@ -108,14 +108,16 @@ resource "aws_cloudwatch_dashboard" "docker_nginx_dashboard" {
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   alarm_name          = "docker-nginx-high-cpu"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
+  evaluation_periods  = "1"  # Reduced to 1 for faster triggering
   metric_name         = "CPUUtilization"
   namespace           = "AWS/EC2"
-  period              = "300"
+  period              = "60"   # Reduced to 1 minute for faster detection
   statistic           = "Average"
-  threshold           = "80"
+  threshold           = "70"   # Reduced threshold for easier demo
   alarm_description   = "This metric monitors ec2 cpu utilization"
   alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "breaching"
 
   dimensions = {
     InstanceId = aws_instance.docker_nginx.id
@@ -130,14 +132,16 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
 resource "aws_cloudwatch_metric_alarm" "high_memory" {
   alarm_name          = "docker-nginx-high-memory"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
+  evaluation_periods  = "1"  # Reduced to 1 for faster triggering
   metric_name         = "mem_used_percent"
   namespace           = "CWAgent"
-  period              = "300"
+  period              = "60"   # Reduced to 1 minute
   statistic           = "Average"
-  threshold           = "85"
+  threshold           = "75"   # Reduced threshold for easier demo
   alarm_description   = "This metric monitors ec2 memory utilization"
   alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "breaching"
 
   dimensions = {
     InstanceId = aws_instance.docker_nginx.id
@@ -184,15 +188,15 @@ resource "aws_sns_topic" "alerts" {
 # CloudWatch RUM App Monitor
 resource "aws_rum_app_monitor" "nginx_rum" {
   name   = "nginx-app-monitor"
-  domain = "54.80.210.131"  # Your EC2 public IP
+  domain = aws_instance.docker_nginx.public_ip  # Use dynamic IP
 
   app_monitor_configuration {
     allow_cookies      = true
     enable_xray        = true
-    session_sample_rate = 0.1
+    session_sample_rate = 1.0  # Increased for better demo visibility
     telemetries        = ["errors", "performance", "http"]
     
-    favorite_pages = ["/", "/health"]
+    favorite_pages = ["/", "/health", "/api/test", "/slow"]
   }
 
   custom_events {

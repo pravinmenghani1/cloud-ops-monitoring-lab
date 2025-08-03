@@ -467,6 +467,367 @@ This monitoring setup provides:
 4. **Automated Recovery**: SSM documents can restart failed services
 5. **Cost Optimization**: Identify over-provisioned resources
 
+## 🎯 Live Demo: Complete Monitoring & Alerting Showcase
+
+This section provides step-by-step instructions to demonstrate all monitoring features including CPU alerts, RUM tracking, X-Ray tracing, and comprehensive observability.
+
+### Prerequisites for Demo
+- Infrastructure deployed successfully (`terraform apply` completed)
+- Email subscription confirmed (check pravinmenghani@gmail.com for SNS confirmation)
+- EC2 instance running and accessible
+
+### 🚨 Demo 1: CPU Alert Triggering
+
+**Objective**: Demonstrate CloudWatch alarms triggering when CPU usage exceeds 70%
+
+#### Step 1: Connect to Your EC2 Instance
+```bash
+# Get your instance ID from Terraform output
+terraform output
+
+# Connect via SSM Session Manager (no SSH keys needed!)
+aws ssm start-session --target <your-instance-id>
+```
+
+#### Step 2: Trigger CPU Stress Test
+```bash
+# Run the pre-configured CPU stress test
+sudo /opt/stress-cpu.sh
+
+# Alternative: Manual stress test
+stress-ng --cpu 2 --timeout 300s --metrics-brief
+```
+
+#### Step 3: Monitor the Alert Process
+**Timeline of Events:**
+- **0-30 seconds**: CPU usage spikes to 90-100%
+- **30-60 seconds**: CloudWatch detects high CPU (>70% threshold)
+- **60-90 seconds**: Alarm state changes from "OK" to "ALARM"
+- **90-120 seconds**: SNS email sent to pravinmenghani@gmail.com
+
+**Expected Email Alert:**
+```
+Subject: ALARM: "docker-nginx-high-cpu" in US East (N. Virginia)
+
+ALARM State: ALARM
+Reason: Threshold Crossed: 1 out of the last 1 datapoints [95.2] was greater than the threshold (70.0)
+
+Timestamp: 2025-08-03 06:XX:XX UTC
+Instance ID: i-xxxxxxxxx
+```
+
+#### Step 4: Verify in AWS Console
+- **CloudWatch Console**: https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#alarmsV2:
+- **Dashboard**: https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=Docker-Nginx-EC2-Dashboard
+
+### 📊 Demo 2: Memory Alert Triggering
+
+**Objective**: Demonstrate memory monitoring and alerting
+
+#### Step 1: Trigger Memory Stress Test
+```bash
+# Connect to EC2 instance
+aws ssm start-session --target <your-instance-id>
+
+# Run memory stress test
+sudo /opt/stress-memory.sh
+
+# Alternative: Manual memory stress
+stress-ng --vm 1 --vm-bytes 512M --timeout 180s
+```
+
+#### Step 2: Expected Results
+- Memory usage increases to >75%
+- CloudWatch alarm "docker-nginx-high-memory" triggers
+- Email notification sent within 2-3 minutes
+
+### 🌐 Demo 3: Real User Monitoring (RUM) with Updated IP
+
+**Objective**: Show RUM tracking user interactions with correct EC2 IP
+
+#### Step 1: Get Your Application URL
+```bash
+# Get the current public IP
+terraform output nginx_url
+# Example output: http://54.80.210.131
+```
+
+#### Step 2: Generate User Traffic
+```bash
+# Connect to EC2 instance
+aws ssm start-session --target <your-instance-id>
+
+# Run traffic generation script
+sudo /opt/generate-traffic.sh
+```
+
+#### Step 3: Access RUM-Enabled Pages
+Open these URLs in your browser (replace with your actual IP):
+- **Main Page**: `http://your-ec2-ip/` (with RUM tracking)
+- **Test Endpoint**: `http://your-ec2-ip/api/test.html` (optimized for RUM)
+- **Slow Endpoint**: `http://your-ec2-ip/api/slow.html` (demonstrates latency)
+
+#### Step 4: View RUM Data
+- **RUM Console**: https://console.aws.amazon.com/rum/home?region=us-east-1
+- **Application**: nginx-app-monitor
+- **Expected Data**: Page views, load times, user sessions, errors
+
+### 🔍 Demo 4: X-Ray Tracing with Latency Simulation
+
+**Objective**: Generate and view distributed traces showing request latency
+
+#### Step 1: Generate X-Ray Traces
+```bash
+# Connect to EC2 instance
+aws ssm start-session --target <your-instance-id>
+
+# Run X-Ray test script
+sudo /opt/test-xray.sh
+```
+
+#### Step 2: Generate Web Request Traces
+```bash
+# Generate requests to slow endpoints
+for i in {1..10}; do
+  curl -w "Response time: %{time_total}s\n" http://localhost/api/slow.html
+  sleep 2
+done
+```
+
+#### Step 3: View Traces in X-Ray Console
+- **X-Ray Console**: https://console.aws.amazon.com/xray/home?region=us-east-1#/service-map
+- **Expected**: Service map showing nginx-app service
+- **Traces**: Individual request traces with timing breakdown
+
+### 📈 Demo 5: Custom Metrics and Log-Based Alarms
+
+**Objective**: Show custom metrics derived from application logs
+
+#### Step 1: Generate Application Errors
+```bash
+# Generate 404 errors to trigger custom error rate alarm
+for i in {1..5}; do
+  curl http://localhost/nonexistent-page-$i
+  sleep 1
+done
+```
+
+#### Step 2: Generate Slow Responses
+```bash
+# Access slow endpoints to trigger response time alarm
+for i in {1..3}; do
+  curl http://localhost/api/slow.html &
+done
+wait
+```
+
+#### Step 3: Monitor Custom Alarms
+Expected alarms to trigger:
+- **custom-nginx-high-error-rate**: When 404 errors exceed 3 per minute
+- **custom-nginx-slow-response-time**: When average response time > 1 second
+
+### 🔧 Demo 6: Application Failure Simulation
+
+**Objective**: Demonstrate monitoring when application completely fails
+
+#### Step 1: Stop Nginx Container
+```bash
+# Connect to EC2 instance
+aws ssm start-session --target <your-instance-id>
+
+# Stop the nginx container
+sudo docker stop nginx-app
+```
+
+#### Step 2: Expected Alerts
+Multiple alarms should trigger:
+- **docker-nginx-container-stopped**: Process count drops
+- **custom-nginx-high-error-rate**: No successful requests
+- **docker-nginx-application-health**: Composite alarm
+
+#### Step 3: Restore Service
+```bash
+# Restart the container
+sudo docker start nginx-app
+
+# Or redeploy via SSM
+aws ssm send-command \
+  --document-name "DeployNginxContainerEnhanced" \
+  --targets "Key=InstanceIds,Values=<instance-id>"
+```
+
+### 📊 Demo 7: CloudWatch Insights Queries
+
+**Objective**: Analyze logs using CloudWatch Insights
+
+#### Step 1: Access CloudWatch Insights
+- **Console**: https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#logsV2:logs-insights
+
+#### Step 2: Run Pre-configured Queries
+Select log group: `/aws/ec2/docker-nginx`
+
+**Top Requested Pages:**
+```sql
+fields @timestamp, @message
+| filter @message like /nginx-access/
+| parse @message /(?<ip>\d+\.\d+\.\d+\.\d+) - - \[(?<timestamp>[^\]]+)\] "(?<method>\w+) (?<path>[^"]*)" (?<status>\d+) (?<size>\d+)/
+| stats count() as requests by path
+| sort requests desc
+| limit 10
+```
+
+**Error Analysis:**
+```sql
+fields @timestamp, @message
+| filter @message like /ERROR/ or @message like /404/
+| stats count() as errors by bin(5m)
+| sort @timestamp desc
+```
+
+**Response Time Analysis:**
+```sql
+fields @timestamp, @message
+| filter @message like /nginx-access/
+| parse @message /rt=(?<response_time>[\d\.]+)/
+| filter response_time > 1.0
+| stats avg(response_time) as avg_response_time, max(response_time) as max_response_time by bin(5m)
+| sort @timestamp desc
+```
+
+### 🎛️ Demo 8: Synthetics Canary Monitoring
+
+**Objective**: Show automated health checks and user journey monitoring
+
+#### Step 1: View Synthetics Results
+- **Synthetics Console**: https://console.aws.amazon.com/synthetics/home?region=us-east-1#/canaries
+- **Canary Name**: nginx-health-check-canary
+
+#### Step 2: Expected Metrics
+- **Success Rate**: Should be >95% when application is healthy
+- **Duration**: Response time for health checks
+- **Screenshots**: Visual proof of successful page loads
+
+### 📧 Demo 9: Email Alert Verification
+
+**Objective**: Verify all alert types are working
+
+#### Expected Email Types:
+1. **High CPU Alert**: When CPU > 70%
+2. **High Memory Alert**: When memory > 75%
+3. **Application Down**: When container stops
+4. **High Error Rate**: When 404s exceed threshold
+5. **Slow Response**: When response time > 1 second
+6. **Recovery Notifications**: When issues are resolved
+
+#### Sample Alert Email:
+```
+Subject: ALARM: "docker-nginx-high-cpu" in US East (N. Virginia)
+
+You are receiving this email because your Amazon CloudWatch Alarm 
+"docker-nginx-high-cpu" in the US East (N. Virginia) region has entered 
+the ALARM state.
+
+Alarm Details:
+- Name: docker-nginx-high-cpu
+- Description: This metric monitors ec2 cpu utilization
+- State Change: OK -> ALARM
+- Reason: Threshold Crossed: 1 datapoint [95.2] was greater than threshold (70.0)
+- Timestamp: 2025-08-03 06:XX:XX UTC
+
+View this alarm: https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#alarmsV2:alarm/docker-nginx-high-cpu
+```
+
+### 🔍 Troubleshooting Demo Issues
+
+#### Issue: CPU Alarm Not Triggering
+**Solution:**
+```bash
+# Check CloudWatch agent status
+sudo systemctl status amazon-cloudwatch-agent
+
+# Restart if needed
+sudo systemctl restart amazon-cloudwatch-agent
+
+# Verify metrics are being sent
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/EC2 \
+  --metric-name CPUUtilization \
+  --dimensions Name=InstanceId,Value=<instance-id> \
+  --start-time 2025-08-03T06:00:00Z \
+  --end-time 2025-08-03T07:00:00Z \
+  --period 300 \
+  --statistics Average
+```
+
+#### Issue: RUM Not Showing Data
+**Solution:**
+```bash
+# Verify RUM configuration
+aws rum get-app-monitor --name nginx-app-monitor
+
+# Check if domain matches EC2 IP
+terraform output nginx_url
+```
+
+#### Issue: No X-Ray Traces
+**Solution:**
+```bash
+# Check X-Ray daemon status
+sudo systemctl status xray
+
+# Check X-Ray logs
+sudo tail -f /var/log/xray/xray.log
+
+# Restart X-Ray daemon
+sudo systemctl restart xray
+```
+
+#### Issue: No Email Notifications
+**Solution:**
+```bash
+# Check SNS subscription
+aws sns list-subscriptions-by-topic --topic-arn <topic-arn>
+
+# Test SNS manually
+aws sns publish \
+  --topic-arn <topic-arn> \
+  --message "Test notification from monitoring demo"
+```
+
+### 📋 Demo Checklist
+
+Before running the demo, ensure:
+- [ ] Infrastructure deployed successfully
+- [ ] EC2 instance is running and accessible
+- [ ] SNS email subscription confirmed
+- [ ] CloudWatch agent is running
+- [ ] X-Ray daemon is running
+- [ ] Nginx container is running
+- [ ] Demo tools are installed (`/opt/stress-*.sh` exist)
+
+### 🎯 Demo Success Criteria
+
+A successful demo should show:
+- [ ] CPU alarm triggers within 2 minutes of stress test
+- [ ] Email notifications received for all alarm types
+- [ ] RUM data appears in console with correct IP
+- [ ] X-Ray traces visible in service map
+- [ ] Custom metrics from logs appear in CloudWatch
+- [ ] Synthetics canary shows health check results
+- [ ] CloudWatch Insights queries return meaningful data
+- [ ] Application recovery after failure simulation
+
+### 📊 Monitoring URLs Quick Reference
+
+- **CloudWatch Dashboard**: https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=Docker-Nginx-EC2-Dashboard
+- **CloudWatch Alarms**: https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#alarmsV2:
+- **RUM Console**: https://console.aws.amazon.com/rum/home?region=us-east-1
+- **X-Ray Service Map**: https://console.aws.amazon.com/xray/home?region=us-east-1#/service-map
+- **CloudWatch Insights**: https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#logsV2:logs-insights
+- **Synthetics**: https://console.aws.amazon.com/synthetics/home?region=us-east-1#/canaries
+
+This comprehensive demo showcases all aspects of modern cloud monitoring and observability, providing hands-on experience with real-world scenarios.
+
 ## Cleanup
 
 To destroy all resources:

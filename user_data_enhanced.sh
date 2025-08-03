@@ -13,7 +13,7 @@ yum install -y xray.rpm
 cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
 {
     "agent": {
-        "metrics_collection_interval": 60,
+        "metrics_collection_interval": 30,
         "run_as_user": "cwagent"
     },
     "logs": {
@@ -59,7 +59,7 @@ cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
                     "cpu_usage_user",
                     "cpu_usage_system"
                 ],
-                "metrics_collection_interval": 60,
+                "metrics_collection_interval": 30,
                 "totalcpu": false
             },
             "disk": {
@@ -67,7 +67,7 @@ cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
                     "used_percent",
                     "inodes_free"
                 ],
-                "metrics_collection_interval": 60,
+                "metrics_collection_interval": 30,
                 "resources": [
                     "*"
                 ]
@@ -80,7 +80,7 @@ cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
                     "reads",
                     "writes"
                 ],
-                "metrics_collection_interval": 60,
+                "metrics_collection_interval": 30,
                 "resources": [
                     "*"
                 ]
@@ -90,14 +90,14 @@ cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
                     "mem_used_percent",
                     "mem_available_percent"
                 ],
-                "metrics_collection_interval": 60
+                "metrics_collection_interval": 30
             },
             "netstat": {
                 "measurement": [
                     "tcp_established",
                     "tcp_time_wait"
                 ],
-                "metrics_collection_interval": 60
+                "metrics_collection_interval": 30
             },
             "processes": {
                 "measurement": [
@@ -114,7 +114,7 @@ EOF
 # Start CloudWatch agent
 /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
 
-# Configure X-Ray daemon
+# Configure X-Ray daemon with enhanced settings
 cat > /etc/amazon/xray/cfg.yaml << 'EOF'
 TotalBufferSizeInMB: 0
 Concurrency: 8
@@ -147,5 +147,60 @@ systemctl start amazon-ssm-agent
 # Create nginx log directories
 mkdir -p /var/log/nginx
 
+# Install additional monitoring tools
+yum install -y htop iotop stress-ng
+
+# Create a simple X-Ray tracing test script
+cat > /opt/test-xray.sh << 'EOF'
+#!/bin/bash
+echo "Testing X-Ray tracing..."
+
+# Install AWS X-Ray SDK for testing
+pip3 install aws-xray-sdk
+
+# Create a simple Python script to generate traces
+cat > /tmp/xray_test.py << 'PYTHON_EOF'
+import time
+import random
+from aws_xray_sdk.core import xray_recorder
+from aws_xray_sdk.core import patch_all
+
+# Patch all AWS SDK calls
+patch_all()
+
+@xray_recorder.capture('test_function')
+def test_function():
+    # Simulate some work
+    time.sleep(random.uniform(0.1, 0.5))
+    
+    # Simulate a subsegment
+    subsegment = xray_recorder.begin_subsegment('database_query')
+    time.sleep(random.uniform(0.05, 0.2))
+    xray_recorder.end_subsegment()
+    
+    return "Test completed"
+
+# Configure X-Ray
+xray_recorder.configure(
+    context_missing='LOG_ERROR',
+    plugins=('EC2Plugin',),
+    daemon_address='127.0.0.1:2000'
+)
+
+# Generate some traces
+for i in range(5):
+    with xray_recorder.in_segment('nginx_test_trace'):
+        result = test_function()
+        print(f"Trace {i+1}: {result}")
+        time.sleep(1)
+
+print("X-Ray test traces generated")
+PYTHON_EOF
+
+python3 /tmp/xray_test.py
+EOF
+
+chmod +x /opt/test-xray.sh
+
 # Signal that the instance is ready
-/opt/aws/bin/cfn-signal -e $? --stack $${AWS::StackName} --resource AutoScalingGroup --region $${AWS::Region} || true
+echo "Enhanced user data script completed successfully"
