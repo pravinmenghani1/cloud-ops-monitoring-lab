@@ -1,4 +1,4 @@
-# Cloud Operations Monitoring Lab
+# Cloud Operations, configuration management and Monitoring Lab
 ## Complete AWS Infrastructure with Automated Deployment, Monitoring & Alerting
 
 This comprehensive hands-on lab demonstrates production-ready cloud infrastructure with automated EC2 deployment using Terraform & SSM, Docker containerization with Nginx, real-time monitoring with CloudWatch, email alerting via SNS, stress testing and failure simulation, plus complete observability and troubleshooting tools.
